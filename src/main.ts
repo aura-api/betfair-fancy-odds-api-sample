@@ -78,10 +78,14 @@ async function main(): Promise<void> {
       path = '/api/bf-gateway/subscribeMarkets';
       body = { marketIds: ['1.234567890'] };
       break;
+    case 'getmarketodds':
+      path = '/api/bf-gateway/getMarketOdds';
+      body = { marketIds: ['1.234567890-12345RD.FY'] };
+      break;
     default:
       console.error(`Unknown command: ${cmd}`);
       console.error(
-        'Usage: pnpm start [listEventTypes|listMarketTypes|listMarketCatalogue|listMarketBook|subscribeMarkets]',
+        'Usage: pnpm start [listEventTypes|listMarketTypes|listMarketCatalogue|listMarketBook|subscribeMarkets|getMarketOdds]',
       );
       process.exit(1);
   }
