@@ -244,10 +244,18 @@ The typical integration follows this sequence:
 │          ↓                                                        │
 │  6. MQTT bf/{marketId}     → Receive continuous odds updates      │
 │                                                                   │
+├──────────────────────────────────────────────────────────────────┤
+│                    ON-DEMAND LOOKUP                                │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  7. getMarketOdds          → Fetch full odds for any market ID    │
+│                               (use when you receive an unknown    │
+│                               market on MQTT)                     │
+│                                                                   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Key concept:** Steps 1–3 are for *discovery* — finding the markets you care about. Step 4 gives you a *snapshot* of current prices. Step 5 activates *streaming* so you receive every price change in real-time without polling.
+**Key concept:** Steps 1–3 are for *discovery* — finding the markets you care about. Step 4 gives you a *snapshot* of current prices. Step 5 activates *streaming* so you receive every price change in real-time without polling. Step 7 lets you look up any market's odds on-demand — useful for non-Betfair markets (Fancy, LINE, Bookmaker) that appear on MQTT but weren't part of your initial discovery.
 
 ---
 
@@ -609,6 +617,77 @@ Subscribe to real-time odds streaming via MQTT for specified markets.
 **After subscribing:** Odds updates will begin arriving on your MQTT connection within seconds. See [Section 8](#8-real-time-odds-via-mqtt) for how to consume them.
 
 **Note:** Subscriptions are persistent per client. You do not need to re-subscribe after MQTT reconnections — the market remains active on the server side.
+
+---
+
+### 6.6 getMarketOdds
+
+Get the current odds snapshot (LotusOddFormat) for any market — including non-Betfair markets like Fancy/LINE and Bookmaker markets that aren't available via `listMarketBook`.
+
+**Use case:** When you receive an MQTT update for a market ID you don't recognise, call this endpoint to get the full odds structure so you can initialize your local state and start applying subsequent MQTT deltas.
+
+| | |
+|---|---|
+| **Endpoint** | `POST /api/bf-gateway/getMarketOdds` |
+| **Permission** | `odds` |
+
+**Request body:**
+
+```json
+{
+  "marketIds": ["1.234567890-12345RD.FY", "1.12345FP_SB"]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `marketIds` | string[] | Yes | Array of market IDs (max **50** per request). Accepts any market ID format — WIN, Fancy/LINE, or Bookmaker. |
+
+**Response:**
+
+```json
+{
+  "markets": [
+    {
+      "marketId": "1.234567890-12345RD.FY",
+      "id": "1.234567890-12345RD.FY",
+      "s": 1,
+      "ip": 1,
+      "sl": "",
+      "bt": 1,
+      "h": 0,
+      "t": 1716321600000,
+      "r": [
+        {
+          "id": 1,
+          "s": 0,
+          "b": [[0.0, 145, 1.83]],
+          "l": [[0.0, 145, 1.91]]
+        }
+      ],
+      "marketName": "Total Runs (1st Innings)",
+      "eventId": "33012345",
+      "runners": [
+        { "selectionId": 1, "runnerName": "Over/Under 145.5" }
+      ]
+    }
+  ]
+}
+```
+
+**Key points:**
+
+- Returns the raw `LotusOddFormat` data — the same structure that MQTT messages use
+- The response includes all fields stored for that market (varies by market type)
+- Markets not found in the system are silently omitted from the `markets` array
+- Use this to bootstrap your local state for any market ID received over MQTT that you haven't seen before
+
+**Typical workflow:**
+
+1. You receive an MQTT message on `bf/{marketId}` for an unknown market ID
+2. Call `getMarketOdds` with that ID to get the full current state
+3. Parse the response to initialize your local model (runners, prices, status)
+4. Continue applying subsequent MQTT deltas on top of that state
 
 ---
 
